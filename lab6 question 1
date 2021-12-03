@@ -1,0 +1,64 @@
+#include <msp430.h>
+int sensor = 0;
+unsigned int value = 0;
+
+void ConfigureADC(void)
+
+{
+ADC10CTL1 = INCH_7 + ADC10DIV_0; // input channel 7, clock divider 1
+ADC10CTL0 = SREF_0 + ADC10SHT_2 + ADC10ON + ADC10IE; // vref vcc and vss, sample and hold time 4xADCCLOCK, enable interrupt,
+// turn on the ADC
+ADC10AE0 |= BIT7;
+}
+
+void ConfigurePins(void)
+{
+P1OUT = 0;
+P1DIR |= BIT0; // output
+}
+
+void main(void) {
+
+WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
+
+BCSCTL1 = CALBC1_1MHZ; // configure clock
+
+DCOCTL = CALDCO_1MHZ; // configure oscillator
+
+ConfigurePins();
+
+ConfigureADC();
+
+while(1)
+
+{
+
+ADC10CTL0 |= ENC + ADC10SC;
+
+
+
+
+
+value = ADC10MEM; // read value adc value.
+
+if(value > 511)
+
+{
+
+P1OUT |= BIT0; //turn ON the Light
+
+}
+
+else
+
+{
+
+P1OUT &= ~BIT0; //turn if OFF
+
+}
+
+}
+
+}
+
+
