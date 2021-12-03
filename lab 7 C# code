@@ -1,0 +1,137 @@
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace Lab07_TS_tempAndLight
+{
+    public partial class TSInterface : Form
+    {
+        int startflag = 0;
+        int flag_sensor;
+        string RxString;
+        string temp = "30";
+        string light = "100";
+        string serialPortSelect = "COM5";
+
+        public TSInterface()
+        {
+            InitializeComponent();
+        }
+
+        private void button1_Click(object sender, EventArgs e) // downloads values and shows in window
+        {
+            WebClient client = new WebClient();
+            client.DownloadString("http://api.thingspeak.com/channels/1591331/feed.json");
+            tempLabel.Text = client.DownloadString("http://api.thingspeak.com/channels/1591331/field/field1/last.text") + "°F";
+            lightLabel.Text = client.DownloadString("http://api.thingspeak.com/channels/1591331/field/field2/last.text") + "%";
+        }
+
+        private void groupBox1_Enter(object sender, EventArgs e)
+        {
+
+        }
+
+        private void serialStart_Click(object sender, EventArgs e)
+        {
+            serialPort1.PortName = serialPortSelect;
+            serialPort1.BaudRate = 9600;
+            serialPort1.Open();
+            if (serialPort1.IsOpen)
+            {
+                serialStart.Enabled = false;
+                serialStop.Enabled = true;
+                dataStream.ReadOnly = false;
+            }
+        }
+
+        private void serialStop_Click(object sender, EventArgs e)
+        {
+            serialPort1.Close();
+            serialStart.Enabled = true;
+            serialStop.Enabled = false;
+            dataStream.ReadOnly = true;
+        }
+
+        private void TSInterface_Load(object sender, EventArgs e)
+        {
+            if (serialPort1.IsOpen)
+                serialPort1.Close();
+
+            comboBox1.Text = "COM5";
+
+            serialPort1.PortName = serialPortSelect;
+            serialPort1.BaudRate = 9600;
+        }
+
+        private void Current_data_Click(object sender, EventArgs e)
+        {
+            dataStream.Text = RxString;
+        }
+
+        private void SerialPort1_DataReceived(object sender, System.IO.Ports.SerialDataReceivedEventArgs e)
+        {
+            RxString = serialPort1.ReadExisting();
+            this.Invoke(new EventHandler(Current_data_Click));
+        }
+
+        private void timer1_Tick(object sender, EventArgs e)
+        {
+            if (!string.Equals(dataStream.Text, ""))
+            {
+                if (serialPort1.IsOpen) serialPort1.Close();
+                try
+                {
+                    const string WRITEKEY = "47GURB2ERA89Y225";
+                    string strUpdateBase = "http://api.thingspeak.com/update";
+                    string strUpdateURI = strUpdateBase + "?api_key=" + WRITEKEY;
+
+                    char[] delimiters = { 'T', 'L' };
+
+                    string[] values = dataStream.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries);  // string is split on char T and L
+             
+                    string strField1 = values[0];                 // program is not assigning values based on delimiters
+                    string strField2 = values[1];                 //     but based on position in string, where: [0] = temp and [1] = light
+                    HttpWebRequest ThingsSpeakReq;
+                    HttpWebResponse ThingsSpeakResp;
+
+                    strUpdateURI += "&field1=" + strField1; // update temp field
+                    strUpdateURI += "&field2=" + strField2; // update light field
+
+                    flag_sensor++;
+                    ThingsSpeakReq = (HttpWebRequest)WebRequest.Create(strUpdateURI);
+                    ThingsSpeakResp = (HttpWebResponse)ThingsSpeakReq.GetResponse();
+                    ThingsSpeakResp.Close();
+                    if (!(string.Equals(ThingsSpeakResp.StatusDescription, "OK")))
+                    {
+                        Exception exData = new Exception(ThingsSpeakResp.StatusDescription);
+                        throw exData;
+                    }
+                }
+                catch (Exception ex)
+                {
+                }
+                //dataStream.Text = "";
+                serialPort1.Open();
+            }
+        }
+
+        private void label2_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void comboBox1_TextUpdate(object sender, EventArgs e)
+        {
+            serialPortSelect = comboBox1.Text;
+        }
+
+    }
+}
