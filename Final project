@@ -1,0 +1,130 @@
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(P2_4, P2_3, P1_5, P2_0, P2_1, P2_2);
+
+volatile int relayReset = 0;
+volatile int motionOverride = 0;
+volatile int lightOn = 0;
+
+void setup()
+{
+  
+  lcd.begin(16, 2);
+
+  pinMode(P1_0, INPUT_PULLUP); // SW1 ON
+  pinMode(P1_6, INPUT_PULLUP); // SW2 OFF
+  pinMode(P1_7, INPUT_PULLUP); // SW3 AUTO
+  attachInterrupt(P1_0, onOverride, FALLING);
+  attachInterrupt(P1_6, offOverride, FALLING);
+  attachInterrupt(P1_7, disableOverride, FALLING);
+
+  pinMode(A4, INPUT);
+  
+  pinMode(P2_5, INPUT); // PIR
+  attachInterrupt(P2_5, motionDetected, RISING);
+  
+  pinMode(P2_6, OUTPUT); // Relay
+
+  digitalWrite(P2_6, LOW); // Relay OFF by default
+
+  Serial.begin(9600);
+
+}
+void loop()
+{
+  
+  //Temperature reading 
+
+  float ThermistorVal = analogRead(A4);
+  float ThermistorTempC;
+  int ThermistorTempF;
+
+  ThermistorTempC = logf(10000.0 * ((1024.0 / ThermistorVal - 1)));
+  //         = logf(10000.0 / (1024.0 / ThermistorVal - 1)); // for pull-up configuration
+  ThermistorTempC = 1 / (0.001129148 + (0.000234125 + (0.0000000876741 * ThermistorTempC
+                    * ThermistorTempC ))* ThermistorTempC );
+  ThermistorTempC = ThermistorTempC - 273.15;            // Convert Kelvin to Celcius
+  ThermistorTempF = (ThermistorTempC * 9.0)/ 5.0 + 32.0; // Convert Celcius to Fahrenheit
+  lcd.clear();
+
+  // check if device is currently in override mode, display accordingly
+  if(motionOverride == 1) {
+
+    lcd.setCursor(0, 1);
+    lcd.print("Override");
+
+  } else {
+
+    lcd.setCursor(0, 1);
+    lcd.print("Motion");
+  }
+
+  //Check if light relay is powered
+  if(lightOn == 1) {
+
+    lcd.setCursor(0, 0);
+    lcd.print("Light On");
+  } else {
+
+    lcd.setCursor(0, 0);
+    lcd.print("Light Off");
+  }
+  
+  lcd.setCursor(12, 1);
+  lcd.print(ThermistorTempF);
+  lcd.print("*F");
+  delay(1000);
+
+  // if loop executes 15 times with no motion activity, reset light
+  // In a real-world scenario this would be much longer, shortened for demonstration purposes.
+  
+  relayReset = relayReset + 1;
+
+  if(relayReset == 15 && motionOverride == 0) {
+    digitalWrite(P2_6, LOW);
+    lightOn = 0;
+  }
+  if(relayReset > 15 || digitalRead(P2_5) == HIGH) { //reset upon motion or error in counter
+    relayReset = 0;
+  }
+
+  Serial.print("T");
+  Serial.print(ThermistorTempF);
+  Serial.print("L");
+  if(digitalRead(P2_5) == LOW){
+    Serial.print("00");
+  } else {
+    Serial.print("01");
+  }
+  
+  
+}
+
+void motionDetected() {
+
+  if(motionOverride == 0) {
+
+    digitalWrite(P2_6, HIGH);
+    lightOn = 1;
+  }
+}
+
+void onOverride() {         // disable motion sensor, turn relay ON
+
+  digitalWrite(P2_6, HIGH);
+  motionOverride = 1;
+  lightOn = 1;
+}
+
+void offOverride() {         // disable motion sensor, turn relay OFF
+
+  digitalWrite(P2_6, LOW);
+  motionOverride = 1;
+  lightOn = 0;
+}
+
+void disableOverride() {         // enable motion sensor, turn relay OFF
+
+  digitalWrite(P2_6, LOW);
+  motionOverride = 0;
+  lightOn = 0;
+}
